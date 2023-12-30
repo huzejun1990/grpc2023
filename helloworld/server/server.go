@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"grpc2023/helloworld/proto"
+	"io"
 	"log"
 	"net"
 )
@@ -26,17 +27,46 @@ func (server) SayHello(ctx context.Context, in *proto.HelloRequest) (*proto.Hell
 	return &proto.HelloReply{
 		Msg: "hello client",
 	}, nil
+}
 
-	return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
-}
 func (server) SayHelloClientStream(stream proto.Greeter_SayHelloClientStreamServer) error {
-	return status.Errorf(codes.Unimplemented, "method SayHelloClientStream not implemented")
+	var i = 0
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			return stream.SendAndClose(&proto.HelloReply{Msg: fmt.Sprintf("total recv count : %d ", i)})
+		}
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
+		fmt.Printf("server recv : %v\n", req)
+		i++
+	}
+
+	//return status.Errorf(codes.Unimplemented, "method SayHelloClientStream not implemented")
 }
+
 func (server) SayHelloServerStream(in *proto.HelloRequest, stream proto.Greeter_SayHelloServerStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method SayHelloServerStream not implemented")
 }
-func (server) SayHelloTwoWayStream(in *proto.HelloRequest, stream proto.Greeter_SayHelloTwoWayStreamServer) error {
-	return status.Errorf(codes.Unimplemented, "method SayHelloTwoWayStream not implemented")
+
+func (server) SayHelloTwoWayStream(stream proto.Greeter_SayHelloTwoWayStreamServer) error {
+	var i = 0
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
+		fmt.Printf("server recv : %v\n", req)
+		stream.Send(&proto.HelloReply{Msg: fmt.Sprintf("%dth request od\n", i)})
+		i++
+	}
+	return nil
 }
 
 func main() {

@@ -13,7 +13,7 @@ service Greeter {
     //服务端流,下载文件场景
     rpc SayHelloServerStream(HelloRequest) returns(stream HelloReply) {}
     //双向流，机器人客服场景
-    rpc SayHelloTwoWayStream(HelloRequest) returns(stream HelloReply) {}
+    rpc SayHelloTwoWayStream(stream HelloRequest) returns(stream HelloReply) {}
 
 }
 

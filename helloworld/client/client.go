@@ -4,11 +4,13 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"grpc2023/helloworld/proto"
+	"io"
 	"log"
 	"time"
 )
@@ -26,8 +28,13 @@ func main() {
 	}
 	defer conn.Close()
 	c := proto.NewGreeterClient(conn)
+	//sayHello(c)
+	//sayHelloClientStream(c)
+	sayHelloTwoWayStream(c)
+}
+
+func getHelloRequest() *proto.HelloRequest {
 	birthday := timestamppb.New(time.Now())
-	ctx := context.Background()
 	any1, _ := anypb.New(birthday)
 	in := &proto.HelloRequest{
 		Name:     "nick",
@@ -43,13 +50,82 @@ func main() {
 			"a": any1,
 		},
 	}
+	return in
+}
 
+func sayHello(c proto.GreeterClient) {
+	ctx := context.Background()
+	in := getHelloRequest()
 	r, err := c.SayHello(ctx, in)
 	if err != nil {
-		//log.Println(err)
 		log.Fatal(err)
 		return
 	}
-	//fmt.Println(r.Msg)
 	log.Println(r.Msg)
+}
+
+func sayHelloClientStream(c proto.GreeterClient) {
+	ctx := context.Background()
+	list := []*proto.HelloRequest{
+		getHelloRequest(), getHelloRequest(), getHelloRequest(),
+	}
+	stream, err := c.SayHelloClientStream(ctx)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	for _, in := range list {
+		err := stream.Send(in)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+	}
+	reply, err := stream.CloseAndRecv()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	log.Printf("client recv: %v\n", reply)
+
+}
+
+func sayHelloTwoWayStream(c proto.GreeterClient) {
+	ctx := context.Background()
+	list := []*proto.HelloRequest{
+		getHelloRequest(), getHelloRequest(), getHelloRequest(),
+	}
+	stream, err := c.SayHelloTwoWayStream(ctx)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	var done = make(chan struct{}, 0)
+
+	go func() {
+		for {
+			reply, err := stream.Recv()
+			if err == io.EOF {
+				close(done)
+				return
+			}
+			if err != nil {
+				log.Println(err)
+				close(done)
+				return
+			}
+			fmt.Printf("client recv: %v\n", reply.Msg)
+		}
+	}()
+
+	for _, in := range list {
+		err := stream.Send(in)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+	}
+	stream.CloseSend()
+	<-done
 }

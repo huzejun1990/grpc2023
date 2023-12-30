@@ -29,7 +29,7 @@ type GreeterClient interface {
 	// 服务端流,下载文件场景
 	SayHelloServerStream(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (Greeter_SayHelloServerStreamClient, error)
 	// 双向流，机器人客服场景
-	SayHelloTwoWayStream(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (Greeter_SayHelloTwoWayStreamClient, error)
+	SayHelloTwoWayStream(ctx context.Context, opts ...grpc.CallOption) (Greeter_SayHelloTwoWayStreamClient, error)
 }
 
 type greeterClient struct {
@@ -115,28 +115,27 @@ func (x *greeterSayHelloServerStreamClient) Recv() (*HelloReply, error) {
 	return m, nil
 }
 
-func (c *greeterClient) SayHelloTwoWayStream(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (Greeter_SayHelloTwoWayStreamClient, error) {
+func (c *greeterClient) SayHelloTwoWayStream(ctx context.Context, opts ...grpc.CallOption) (Greeter_SayHelloTwoWayStreamClient, error) {
 	stream, err := c.cc.NewStream(ctx, &Greeter_ServiceDesc.Streams[2], "/helloworld.Greeter/SayHelloTwoWayStream", opts...)
 	if err != nil {
 		return nil, err
 	}
 	x := &greeterSayHelloTwoWayStreamClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
 	return x, nil
 }
 
 type Greeter_SayHelloTwoWayStreamClient interface {
+	Send(*HelloRequest) error
 	Recv() (*HelloReply, error)
 	grpc.ClientStream
 }
 
 type greeterSayHelloTwoWayStreamClient struct {
 	grpc.ClientStream
+}
+
+func (x *greeterSayHelloTwoWayStreamClient) Send(m *HelloRequest) error {
+	return x.ClientStream.SendMsg(m)
 }
 
 func (x *greeterSayHelloTwoWayStreamClient) Recv() (*HelloReply, error) {
@@ -158,7 +157,7 @@ type GreeterServer interface {
 	// 服务端流,下载文件场景
 	SayHelloServerStream(*HelloRequest, Greeter_SayHelloServerStreamServer) error
 	// 双向流，机器人客服场景
-	SayHelloTwoWayStream(*HelloRequest, Greeter_SayHelloTwoWayStreamServer) error
+	SayHelloTwoWayStream(Greeter_SayHelloTwoWayStreamServer) error
 	mustEmbedUnimplementedGreeterServer()
 }
 
@@ -175,7 +174,7 @@ func (UnimplementedGreeterServer) SayHelloClientStream(Greeter_SayHelloClientStr
 func (UnimplementedGreeterServer) SayHelloServerStream(*HelloRequest, Greeter_SayHelloServerStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method SayHelloServerStream not implemented")
 }
-func (UnimplementedGreeterServer) SayHelloTwoWayStream(*HelloRequest, Greeter_SayHelloTwoWayStreamServer) error {
+func (UnimplementedGreeterServer) SayHelloTwoWayStream(Greeter_SayHelloTwoWayStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method SayHelloTwoWayStream not implemented")
 }
 func (UnimplementedGreeterServer) mustEmbedUnimplementedGreeterServer() {}
@@ -257,15 +256,12 @@ func (x *greeterSayHelloServerStreamServer) Send(m *HelloReply) error {
 }
 
 func _Greeter_SayHelloTwoWayStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(HelloRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(GreeterServer).SayHelloTwoWayStream(m, &greeterSayHelloTwoWayStreamServer{stream})
+	return srv.(GreeterServer).SayHelloTwoWayStream(&greeterSayHelloTwoWayStreamServer{stream})
 }
 
 type Greeter_SayHelloTwoWayStreamServer interface {
 	Send(*HelloReply) error
+	Recv() (*HelloRequest, error)
 	grpc.ServerStream
 }
 
@@ -275,6 +271,14 @@ type greeterSayHelloTwoWayStreamServer struct {
 
 func (x *greeterSayHelloTwoWayStreamServer) Send(m *HelloReply) error {
 	return x.ServerStream.SendMsg(m)
+}
+
+func (x *greeterSayHelloTwoWayStreamServer) Recv() (*HelloRequest, error) {
+	m := new(HelloRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // Greeter_ServiceDesc is the grpc.ServiceDesc for Greeter service.
@@ -304,6 +308,7 @@ var Greeter_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "SayHelloTwoWayStream",
 			Handler:       _Greeter_SayHelloTwoWayStream_Handler,
 			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "helloworld/proto/helloworld.proto",
